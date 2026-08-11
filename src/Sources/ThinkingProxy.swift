@@ -259,25 +259,12 @@ class ThinkingProxy {
             return
         }
         
-        // Try to parse and modify JSON body for POST requests
-        var modifiedBody = bodyString
-        var thinkingEnabled = false
-        var matchedCopilotAlias = false
-        
-        if method == "POST" && !bodyString.isEmpty {
-            let aliasRewrite = ModelAliasMapper.rewriteModelIfAlias(in: bodyString)
-            modifiedBody = aliasRewrite.body
-            matchedCopilotAlias = aliasRewrite.matchedAlias
-
-            if let result = processThinkingParameter(jsonString: modifiedBody) {
-                modifiedBody = result.0
-                thinkingEnabled = result.1
-            }
-            // Strip cache_control fields that cause 400 errors via the OAuth route
-            if let stripped = stripCacheControl(from: modifiedBody) {
-                modifiedBody = stripped
-            }
-        }
+        let processedBody = method == "POST" && !bodyString.isEmpty
+            ? processRequestBody(bodyString)
+            : (body: bodyString, thinkingEnabled: false, matchedCopilotAlias: false)
+        let modifiedBody = processedBody.body
+        let thinkingEnabled = processedBody.thinkingEnabled
+        let matchedCopilotAlias = processedBody.matchedCopilotAlias
         
         // Route Claude requests through Vercel AI Gateway when configured
         if vercelConfig.isActive && method == "POST" && isClaudeModelRequest(body: modifiedBody) && !matchedCopilotAlias {
@@ -296,53 +283,15 @@ class ThinkingProxy {
         return model.starts(with: "claude-") || model.starts(with: "gemini-claude-")
     }
 
-    /// Strips `cache_control` fields from the request body that cause 400 errors via the OAuth route
-    private func stripCacheControl(from jsonString: String) -> String? {
-        guard let jsonData = jsonString.data(using: .utf8),
-              var json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-            return nil
-        }
+    func processRequestBody(_ body: String) -> (body: String, thinkingEnabled: Bool, matchedCopilotAlias: Bool) {
+        let aliasRewrite = ModelAliasMapper.rewriteModelIfAlias(in: body)
+        let thinkingResult = processThinkingParameter(jsonString: aliasRewrite.body)
 
-        var modified = false
-
-        func stripFromDictArray(_ array: inout [[String: Any]]) {
-            for i in array.indices {
-                if array[i]["cache_control"] != nil {
-                    array[i].removeValue(forKey: "cache_control")
-                    modified = true
-                }
-                // Recurse into nested content arrays
-                if var nested = array[i]["content"] as? [[String: Any]] {
-                    stripFromDictArray(&nested)
-                    array[i]["content"] = nested
-                }
-            }
-        }
-
-        if var system = json["system"] as? [[String: Any]] {
-            stripFromDictArray(&system)
-            if modified { json["system"] = system }
-        }
-
-        if var messages = json["messages"] as? [[String: Any]] {
-            stripFromDictArray(&messages)
-            if modified { json["messages"] = messages }
-        }
-
-        if var tools = json["tools"] as? [[String: Any]] {
-            stripFromDictArray(&tools)
-            if modified { json["tools"] = tools }
-        }
-
-        guard modified else { return nil }
-
-        guard let modifiedData = try? JSONSerialization.data(withJSONObject: json),
-              let modifiedString = String(data: modifiedData, encoding: .utf8) else {
-            return nil
-        }
-
-        NSLog("[ThinkingProxy] Stripped cache_control fields from request body")
-        return modifiedString
+        return (
+            body: thinkingResult?.0 ?? aliasRewrite.body,
+            thinkingEnabled: thinkingResult?.1 ?? false,
+            matchedCopilotAlias: aliasRewrite.matchedAlias
+        )
     }
     
     /**
