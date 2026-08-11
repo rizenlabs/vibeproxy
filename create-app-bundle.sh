@@ -12,8 +12,8 @@ NC='\033[0m'
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$PROJECT_DIR/src"
-APP_NAME="VibeProxy"
-BUNDLE_ID="com.cliproxyapi.menubar"
+APP_NAME="VibeFork"
+BUNDLE_ID="com.rizenlabs.vibefork"
 BUILD_DIR="$SRC_DIR/.build/release"
 APP_DIR="$PROJECT_DIR/$APP_NAME.app"
 
