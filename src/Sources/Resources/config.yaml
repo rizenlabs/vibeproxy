@@ -29,6 +29,13 @@ proxy-url: ""
 # Retry configuration
 request-retry: 3
 
+# Distribute new conversations across accounts while keeping each active
+# conversation on one account so its provider-side prompt cache stays warm.
+routing:
+  strategy: "round-robin"
+  session-affinity: true
+  session-affinity-ttl: "1h"
+
 # Timeout for upstream provider requests
 # Default: 10m. Set to "0" to disable timeout.
 # Important for Extended Thinking requests which may take 5-10+ minutes.
