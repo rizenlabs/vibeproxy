@@ -8,7 +8,6 @@ struct ConfigProviderAuthRecord: Equatable {
 
 enum ConfigComposer {
     static let uiMetadataKeys: Set<String> = ["display-name", "help-text", "icon-system"]
-    static let runtimeEditableTopLevelKeys: Set<String> = ["api-keys"]
     
     static func composeAdditiveBaseConfig(bundledRoot: [String: Any], userRoot: [String: Any]?) -> [String: Any] {
         guard let userRoot else {
@@ -21,15 +20,17 @@ enum ConfigComposer {
         in root: [String: Any],
         from runtimeRoot: [String: Any]?
     ) -> [String: Any] {
-        guard let runtimeRoot else {
+        guard let runtimeRoot,
+              root["api-keys"] == nil,
+              stringKeyedDictionary(root["access"] ?? [:])?["api-keys"] == nil else {
             return root
         }
 
         var mergedRoot = root
-        for key in runtimeEditableTopLevelKeys where mergedRoot[key] == nil {
-            if let runtimeValue = runtimeRoot[key] {
-                mergedRoot[key] = runtimeValue
-            }
+        // v8 dashboard writes move client keys under access; root api-keys then holds upstream groups.
+        let access = stringKeyedDictionary(runtimeRoot["access"] ?? [:])
+        if let clientKeys = access?["api-keys"] as? [String] ?? runtimeRoot["api-keys"] as? [String] {
+            mergedRoot["api-keys"] = clientKeys
         }
         return mergedRoot
     }
